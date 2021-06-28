@@ -1,0 +1,71 @@
+<!DOCTYPE HTML>
+<meta charset="utf-8">
+<title>
+[0105: get a VSS tree without specifying path]
+</title>
+<link rel="help" href="https://www.w3.org/TR/vehicle-information-service/#idl-def-getrequest">
+<link rel="stylesheet" type="text/css" href="./style-general.css">
+
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="./vehicle-test-config.js"></script>
+<script src="./vehicle-test-helper.js"></script>
+
+<div id="test-title">
+[0105: get a VSS tree by getMetadata without specifying path]
+</div>
+<br>
+<div id="test-assertion">
+<b>Test assertion:</b><br>
+When the client makes a request with a correct 'getMetadata' action without specifying 'path',<br>
+ 'MetadataSuccessResponse' is returned in which entire VSS tree is enclosed.<br>
+</div>
+<div id="scenario">
+<br>
+<b>Test Scenario:</b><br>
+1. Execute getMetadata method without specifing a path<br>
+2. Confirm 'metadataSuccessResponse' will be returned and it contains entire VSS tree.<br>
+<br>
+<b>Expected Result:</b><br>
+- 'MetadataSuccessResponse' is retruned and it contains entire VSS tree. <br>
+</div>
+
+<div id="result"></div>
+<br>
+<div id="log"></div>
+
+<script>
+var reqId = "reqid-0105";
+
+var t = async_test("getMetadata success case");
+var vehicle  = new WebSocket(VISS_URL, VISS_SUBPROTO);
+
+vehicle.onopen = function() {
+  // process messages from the server
+  vehicle.onmessage = function(event) {
+    var msg = JSON.parse(event.data);
+    t.step_func(function() {
+      if (isMetadataSuccessResponse(reqId, msg)) {
+        //TODO: Response really matches with request?
+        //TODO: How to judge if this is engire tree?
+        var vssStr = JSON.stringify(msg.metadata).substr(1,3000);
+        helper_terminate_success("getMetadata response received.");
+        addLogMessage("<br>vss = " + vssStr);
+      } else {
+        helper_terminate_failure("getMetadata method failed");
+      }
+    })();
+  }
+
+  // in case server doesn't return response
+  t.step_timeout(function() {
+    helper_terminate_failure("Fishish by timeout");
+  }, TIME_OUT_TIME);
+
+  addLogMessage("Send getMetadata request without path");
+  var get_req = '{"action":"getMetadata","requestId":"'+reqId+'"}';
+  addLogMessage("getMetadata req: json="+get_req);
+  vehicle.send(get_req);
+}
+</script>
+</html>

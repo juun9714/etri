@@ -1,0 +1,72 @@
+<!DOCTYPE HTML>
+<meta charset="utf-8">
+<title>
+[0120: get a VSS tree with an invalid request]
+</title>
+<link rel="help" href="https://www.w3.org/TR/vehicle-information-service/#idl-def-getrequest">
+<link rel="stylesheet" type="text/css" href="./style-general.css">
+
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="./vehicle-test-config.js"></script>
+<script src="./vehicle-test-helper.js"></script>
+
+<div id="test-title">
+[0120: get a VSS tree with an invalid getMetadata request]
+</div>
+<br>
+<div id="test-assertion">
+<b>Test assertion:</b><br>
+When the client makes a request with an incorrect 'getMetadata' action to the server,<br>
+ a JSON data object defined as 'metadataErrorResponse' is returned.<br>
+</div>
+<div id="scenario">
+<br>
+<b>Test Scenario:</b><br>
+1. Execute getMetadata method with invalid data path<br>
+2. Confirm 'metadataErrorResponse' will be returned<br>
+<br>
+<b>Expected Result:</b><br>
+- 'MetadataErrorResponse' is retruned <br>
+</div>
+
+<div id="result"></div>
+<br>
+<div id="log"></div>
+
+<script>
+var reqId = "reqid-0100";
+var path = GETMETADATA_INVALID_PATH;
+
+var t = async_test("getMetadata success case");
+var vehicle  = new WebSocket(VISS_URL, VISS_SUBPROTO);
+
+vehicle.onopen = function() {
+  // process messages from the server
+  vehicle.onmessage = function(event) {
+    var msg = JSON.parse(event.data);
+    t.step_func(function() {
+
+      if (isMetadataSuccessResponse(reqId, msg)) {
+        var vssStr = JSON.stringify(msg.metadata).substr(1,3000);
+        helper_terminate_failure("metadataSuccessResponse received. Wrong behavior");
+        addLogMessage("<br>vss = " + vssStr);
+      } else {
+        helper_terminate_success("metadataErrorResponse received. Right behavior");
+        //TODO: show error detail
+      }
+    })();
+  }
+
+  // in case server doesn't return response
+  t.step_timeout(function() {
+    helper_terminate_failure("Fishish by timeout");
+  }, TIME_OUT_TIME);
+
+  addLogMessage("Send getMetadata request. path = " + path);
+  var get_req = '{"action":"getMetadata","path":"'+ path +'" ,"requestId":"'+reqId+'"}';
+  addLogMessage("getMetadata req: json"+get_req)
+  vehicle.send(get_req);
+}
+</script>
+</html>

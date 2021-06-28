@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>
+[0020: Channel independency among clients]
+</title>
+
+<link rel="stylesheet" type="text/css" href="./style-general.css">
+
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="./vehicle-test-config.js"></script>
+<script src="./vehicle-test-helper.js"></script>
+<script src="./0020-const.js"></script>
+
+<!--
+==========
+Test Assertion:
+[0020: Channel independency among clients]
+==
+The access-control state of a websocket channel should not affect the other applications.
+
+==========
+Test Senario:
+1. Open two client html apps (child1, child2) inside two iframes.
+2. Execute an action which requires authorize in both client app and confirm both fails.
+3. Execute Authorize() method in child1.
+4. Confirm the action success in child1 and fails in child2,
+   which means Authorize() method in child1 doesn't affect to child2.
+-->
+
+<div id="test-title">
+[0020: Channel independency among clients]<br>
+</div>
+<div id="scenario">
+<br>
+1. Open two client html apps (child1, child2) inside two iframes for each.<br>
+2. Execute an action (= Set() method to a data path) which requires authorize, in both client app.
+   Then Confirm both Set() method fails.<br>
+3. Execute Authorize() method in child1.<br>
+4. Confirm the Authorize() method in child1 doesn't affect to child2 as below.<br>
+<br>
+<b>Expected Result:</b><br>
+- child1: The action success. <br>
+- child2: The action fails. <br>
+</div>
+
+<div id="result"></div>
+<br>
+<b> Application 1: 0020-child-visual.html running </b>
+<iframe name="nm_child1" id="id_child1" src="0020-child-visual.html" width="1400" height="100"></iframe>
+<br>
+<b> Application 2: 0020-child-visual.html running </b>
+<iframe name="nm_child2" id="id_child2" src="0020-child-visual.html" width="1400" height="100"></iframe>
+<br>
+<div id="log"></div>
+
+<script>
+
+// ===================
+// === Preparation ===
+var t = async_test("Access-Control test: channel independency");
+
+var ch1_phase = PH_0_START;
+var ch2_phase = PH_0_START;
+
+var ifr_child1 = null;
+var ifr_child2 = null;
+
+var flg_connection = false;
+
+window.addEventListener("load", function() {
+
+  ifr_child1 = document.getElementById("id_child1");
+  ifr_child2 = document.getElementById("id_child2");
+
+  var win_child1 = ifr_child1.contentWindow;
+  var win_child2 = ifr_child2.contentWindow;
+
+  // in case server doesn't return response
+  t.step_timeout(function() {
+    if (flg_connection === false) {
+      helper_terminate_failure("Finish by timeout",null,null);
+    }
+  }, TIME_OUT_TIME);
+
+}, false);
+
+// =====================
+// === State Machine ===
+
+function parent_main() {
+
+  //addLogMessage("parent_main: ch1_pahse="+ch1_phase+" , ch2_phase="+ch2_phase);
+
+  if (ch1_phase === PH_0_START ||
+      ch2_phase === PH_0_START) {
+    //Command children to connect WebSocket
+
+  } else if (ch1_phase === PH_1_CONN_ESTABLISHED &&
+             ch2_phase === PH_1_CONN_ESTABLISHED) {
+    //If execution doesn't come here by a certain time, should finish by timeout.
+
+    //Both children establish connections.
+    flg_connection = true;
+
+    //Command children to execute an action
+    sendCmdToChild("child1", CMD_2_DO_ACTION);
+    sendCmdToChild("child2", CMD_2_DO_ACTION);
+    addLogMessage("CMD_2: WebSocket Opened. Send CMD_2_DO_ACTION");
+
+  } else if (ch1_phase === PH_2_ACTION_SENT ||
+             ch2_phase === PH_2_ACTION_SENT) {
+    //The command has been sent. Wait for response from children.
+
+  } else if (
+    (ch1_phase === PH_3_ACTION_RECEIVED_ERROR) &&
+    (ch2_phase === PH_3_ACTION_RECEIVED_ERROR) ) {
+    //Received responses from both children.
+    //Expected result:
+    // - child1: failed
+    // - child2: failed
+
+    //Then, execute Authorize() method in child1.
+    sendCmdToChild("child1",CMD_3_DO_AUTHORIZE);
+    addLogMessage("CMD_3: DO_ACTION finished. Send CMD_3_DO_AUTHORIZE");
+
+  } else if (
+    (ch1_phase === PH_3_ACTION_RECEIVED_SUCCESS) ||
+    (ch2_phase === PH_3_ACTION_RECEIVED_SUCCESS) ) {
+    //Received response from both children.
+    //This is not expected result. Terminate the test as FAILURE.
+    t.step_func(function() {
+      var _msg = "";
+      if (ch1_phase === PH_3_ACTION_RECEIVED_SUCCESS)
+        _msg = _msg + "ch1: DO_ACTION success. ";
+      if (ch2_phase === PH_3_ACTION_RECEIVED_SUCCESS)
+        _msg = _msg + "ch2: DO_ACTION success. ";
+      addLogMessage("FAILURE: " + _msg);
+      addLogMessage("----: ACTION error on both connection is expected. ");
+      helper_terminate_failure("Action Succeeded (Error expected)",null,null);
+    })();
+
+  } else if (ch1_phase === PH_4_VALID_AUTH_SENT) {
+    //Wait for Authorize() method response.
+
+  } else if (
+    (ch1_phase === PH_5_AUTH_RECEIVED_SUCCESS) &&
+    (ch2_phase === PH_3_ACTION_RECEIVED_SUCCESS || ch2_phase === PH_3_ACTION_RECEIVED_ERROR) ) {
+    //Received Authorize Success message from child1.
+    //Then, command children to execute the action again.
+    sendCmdToChild("child1",CMD_4_DO_ACTION);
+    sendCmdToChild("child2",CMD_4_DO_ACTION);
+    addLogMessage("CMD_4: DO_AUTHORIZE finished. Send CMD_4_DO_ACTION");
+
+  } else if (
+    (ch1_phase === PH_5_AUTH_RECEIVED_ERROR) &&
+    (ch2_phase === PH_3_ACTION_RECEIVED_SUCCESS || ch2_phase === PH_3_ACTION_RECEIVED_ERROR) ) {
+    //Received Authorize Failure from child1. In this case, can not continue the test.
+    //Terminate the test as FAOLURE.
+    t.step_func(function() {
+      addLogMessage("FAILURE: Authorize Failed. Test terminate.");
+      addLogMessage("----: ACTION error on both connection is expected. ");
+      helper_terminate_failure("Authorize Failed (Success expected)",null,null);
+    })();
+
+  } else if (ch1_phase === PH_6_ACTION_SENT ||
+             ch2_phase === PH_6_ACTION_SENT) {
+    //Wait for response from both children
+
+  } else if (
+    (ch1_phase === PH_7_ACTION_RECEIVED_SUCCESS || ch1_phase === PH_7_ACTION_RECEIVED_ERROR) &&
+    (ch2_phase === PH_7_ACTION_RECEIVED_SUCCESS || ch2_phase === PH_7_ACTION_RECEIVED_ERROR) ) {
+    //Responses are not expected results, terminate test as FAILURE.
+
+    addLogMessage("CMD_9: DO_ACTION finished. Send CMD_9_STOP");
+    sendCmdToChild("child1",CMD_9_STOP);
+    sendCmdToChild("child2",CMD_9_STOP);
+
+    //Expected Result:
+    // - child1: SUCCESS
+    // - child2: FAILURE
+    //(If result is not expected ones, test FAILURE.)
+    t.step_func(function() {
+      var _msg = "";
+      if (ch1_phase === PH_7_ACTION_RECEIVED_SUCCESS)
+        _msg = _msg + "ch1: DO_ACTION success. ";
+      else
+        _msg = _msg + "ch1: DO_ACTION error. ";
+
+      if (ch2_phase === PH_7_ACTION_RECEIVED_SUCCESS)
+        _msg = _msg + "ch2: DO_ACTION success. ";
+      else
+        _msg = _msg + "ch2: DO_ACTION error. ";
+
+      if (
+        ch1_phase === PH_7_ACTION_RECEIVED_SUCCESS &&
+        ch2_phase === PH_7_ACTION_RECEIVED_ERROR ) {
+        // Expected resutl. Test Success
+        addLogMessage("SUCCESS: " + _msg);
+        addLogMessage("----: ACTION on ch1:SUCCESS, ch2:ERROR ");
+        helper_terminate_success("Test Succeeded",null,null);
+
+      } else if (
+        ch1_phase === PH_7_ACTION_RECEIVED_ERROR ||
+        ch2_phase === PH_7_ACTION_RECEIVED_SUCCESS ) {
+        // Unexpected result. Test Failure
+        addLogMessage("FAILURE: " + _msg);
+        addLogMessage("----: ACTION result is not expected behavior.");
+        helper_terminate_failure("Test failed",null,null);
+      }
+    })();
+  }
+}
+
+// ===========================
+// === Communication Funcs ===
+
+// Msg: Child => Parent
+function handleMsgFromChild(_name, _phase) {
+  if (_name === "id_child1") {
+    ch1_phase = _phase;
+  } else if (_name === "id_child2") {
+    ch2_phase = _phase;
+  }
+  setTimeout( parent_main(), 0);
+}
+
+// Log: Child => Parent
+function showLogFromChild(_name, _text) {
+  addLogMessage("fromChild :"+_name+" : "+_text);
+}
+
+// Cmd: Parent => Child
+function sendCmdToChild(_name, _cmd) {
+  if (_name === "child1") {
+    ifr_child1.contentWindow.handleCmdFromParent(_cmd);
+  } else if (_name === "child2") {
+    ifr_child2.contentWindow.handleCmdFromParent(_cmd);
+  }
+}
+
+</script>
+</html>
+

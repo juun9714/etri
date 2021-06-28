@@ -1,0 +1,14 @@
+
+{
+    "action":"get",
+    "requestId":"request-130",
+    "value":"2334", 
+    "timestamp":"s"
+}
+
+
+{
+    "data":{"path":"Vehicle/Drivetrain/InternalCombustionEngine/RPM",
+        "dp":{"value":"2372", "ts":"2020-04-15T13:37:00Z"}
+    }
+}

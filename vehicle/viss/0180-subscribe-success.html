@@ -1,0 +1,131 @@
+<!DOCTYPE HTML>
+<meta charset="utf-8">
+<title>
+[0180: create a new subscription]
+</title>
+<link rel="help" href="https://www.w3.org/TR/vehicle-information-service/#idl-def-getrequest">
+<link rel="stylesheet" type="text/css" href="./style-general.css">
+
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="./vehicle-test-config.js"></script>
+<script src="./vehicle-test-helper.js"></script>
+
+<div id="test-title">
+[0180: create a new subscription]
+</div>
+<br>
+<div id="test-assertion">
+<b>Test assertion:</b><br>
+When the client makes a request to the server to create a new subscription,<br>
+ a JSON data object defined as 'subscribeSuccessResponse' is returned.<br>
+</div>
+<div id="scenario">
+<br>
+<b>Test Scenario:</b><br>
+1. Execute 'subscribe' method specifing valid information.<br>
+   (e.g. path = 'Signal.Drivetrain.Transmission.Speed')<br>
+2. Confirm 'SubscribeSuccessResponse' is returned.<br>
+<br>
+<b>Expected Result:</b><br>
+- 'SubscribeSuccessResponse' is returned.<br>
+</div>
+
+<div id="result"></div>
+<br>
+<div id="log"></div>
+
+
+<script>
+// const
+var reqId = "reqid-0180";
+var subId = null;
+var path = SUBSCRIBE_STANDARD_PATH;
+
+// phase
+var PH_START            = 0;
+var PH_SENT_SUBSCRIBE   = 1;
+var PH_SUBSCRIBED       = 2;
+var PH_SENT_UNSUBSCRIBE = 3;
+var PH_UNSUBSCRIBED     = 4;
+var PH_END              = 5;
+
+var phase = PH_START;
+
+var t = async_test("Subscribe test: success 01");
+var vehicle  = new WebSocket(VISS_URL, VISS_SUBPROTO);
+vehicle.onopen = function() {
+  // process messages from the server
+  vehicle.onmessage = function(event) {
+    addLogMessage("Response: json="+event.data);
+    var msg = JSON.parse(event.data);
+
+    // subscirbe has sent
+    if (phase == PH_START) {
+      // nothing to do
+    } else if (phase == PH_SENT_SUBSCRIBE) {
+      t.step_func(function() {
+        // wait for subscribe response
+        if (msg.action !== 'subscribe') {
+          addLogMessage("PH_SENT_SUBSCRIBE: Ignore messages except for Subscirbe response.");
+          return;
+        }
+        var res = isSubscribeSuccessResponse(reqId, msg);
+        assert_true(res, "True if subscribeSuccessResponse received.");
+        if (res) {
+          addLogMessage("TEST SUCCESS: subscribeSuccessResponse received. subscribeId = " + msg.subscriptionId + "<br>");
+          addLogSuccess("subscribeSuccessResponse received.");
+          subId = msg.subscriptionId
+
+          // Test successed. Send unsubscribe
+          addLogMessage("Send unsubscribe request");
+          var unsub_request = '{"action":"unsubscribe"'
+                             +' ,"subscriptionId":"'+subId+'"'
+                             +' ,"requestId":"'+reqId+'"'
+                             +'}';
+          addLogMessage("Unsub request: json=" + unsub_request);
+          vehicle.send( unsub_request );
+          phase = PH_SENT_UNSUBSCRIBE;
+        } else {
+          helper_terminate_failure("subscribeErrorResponse received. test failed.");
+          phase = PH_END;
+        }
+      })();
+    } else if (phase == PH_SENT_UNSUBSCRIBE) {
+      t.step_func(function() {
+        // wait for unsubscribe response
+        if (msg.action !== 'unsubscribe') {
+          addLogMessage("PH_SENT_UNSUBSCRIBE: Ignore messages except for UnsubscirbeSuccessResponse/ErrorResonse.");
+          return;
+        }
+        if (isUnsubscribeSuccessResponse(reqId, subId, msg)) {
+          // unsubscibe success
+          phase = PH_UNSUBSCRIBED;
+          helper_terminate_normal("unsubscribeSuccessResponse received");
+        } else if (isUnsubscribeErrorResponse(reqId, subId, msg)) {
+          // unsubscibe error
+          // Test is already success. Terminate anyway
+          helper_terminate_normal("unsubscribeErrorResponse received");
+        }
+      })();
+    } else if (phase == PH_UNSUBSCRIBED) {
+      // nothing to do
+    }
+  }
+
+  // in case server doesn't return response
+  t.step_timeout(function() {
+    if (phase < PH_SUBSCRIBED) {
+      helper_terminate_failure("Finish by timeout");
+    }
+  }, TIME_OUT_TIME);
+
+  addLogMessage("Send subscribe request: path="+path);
+  var sub_request = '{"action":"subscribe","path":"' +path+ '" ,"requestId":"' +reqId+ '"}';
+  addLogMessage("Sub Request: json="+sub_request);
+  vehicle.send(sub_request);
+  phase = PH_SENT_SUBSCRIBE;
+}
+</script>
+</html>
+

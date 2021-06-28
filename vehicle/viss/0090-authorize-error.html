@@ -1,0 +1,76 @@
+<!DOCTYPE HTML>
+<meta charset="utf-8">
+<title>
+[0090: authorize incorrectly]
+</title>
+<link rel="help" href="https://www.w3.org/TR/vehicle-information-service/#idl-def-getrequest">
+<link rel="stylesheet" type="text/css" href="./style-general.css">
+
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="./vehicle-test-config.js"></script>
+<script src="./vehicle-test-helper.js"></script>
+
+<div id="test-title">
+[0090: authorize incorrectly]
+</div>
+<br>
+<div id="test-assertion">
+<b>Test assertion:</b><br>
+When the client makes a request with an incorrect 'authorize' action to the server,<br>
+ a JSON data object defined as 'authorizeErrorResponse' is returned.<br>
+</div>
+<div id="scenario">
+<br>
+<b>Test Scenario:</b><br>
+1. Execute 'authorize' method with *INVALID* token.<br>
+2. Confirm VISS server returns 'AuthorizeErrorResponse' json.<br>
+<br>
+<b>Expected Result:</b><br>
+- 'AuthorizeErrorResponse' json is received. <br>
+</div>
+
+<div id="result"></div>
+<br>
+<div id="log"></div>
+
+<script>
+// const
+var reqId = "reqid-0090";
+var invalid_token = TOKEN_INVALID;
+
+var t = async_test("authorize() error case");
+var vehicle  = new WebSocket(VISS_URL, VISS_SUBPROTO);
+
+vehicle.onopen = function() {
+  // process messages from the server
+  vehicle.onmessage = function(event) {
+    addLogMessage("Received authorize response: json=" + event.data);
+    var msg = JSON.parse(event.data);
+    t.step_func(function() {
+
+      if (isAuthorizeSuccessResponse(reqId, msg)) {
+        //assert_true(true, "Get response received. value = " + msg.value);
+        helper_terminate_failure("authorizeSuccessResponse received. Should be rejected.");
+      } else if (isAuthorizeErrorResponse(reqId, msg)) {
+        helper_terminate_success("authorizeErrorResponse received. Right behevior");
+      }
+
+    })();
+  }
+
+  // in case server doesn't return response
+  t.step_timeout(function() {
+    helper_terminate_failure("Fishish by timeout");
+  }, TIME_OUT_TIME);
+
+  addLogMessage("Send authorize request: tokens=" + invalid_token);
+  var tokens = JSON.stringify({"authorization"     : invalid_token,
+                "www-vehicle-device": invalid_token});
+
+  var request_json = '{"action":"authorize","tokens":'+ tokens +' ,"requestId":"'+reqId+'"}';
+  addLogMessage("Send authorize request: json=" + request_json);
+  vehicle.send(request_json);
+}
+</script>
+</html>

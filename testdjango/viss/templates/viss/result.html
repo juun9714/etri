@@ -1,0 +1,14 @@
+{% if result.requestId == 0130 %}
+    <p>REQUEST ID : {{result.requestId}}</p>
+    <p>RECEIVED : {{result}}</p>
+    
+{% else %}
+    <p>Received no response</p>
+{% endif %}
+
+<script type="text/javascript">
+
+    var reqId = "reqid-0130";
+    console.log("{{result.requestId}}")
+    console.log("{{result.action}}")
+</script>

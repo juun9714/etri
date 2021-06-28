@@ -1,0 +1,219 @@
+<!DOCTYPE HTML>
+<meta charset="utf-8">
+<title>
+[0100: get a VSS tree with a valid request]
+</title>
+<link rel="help" href="https://www.w3.org/TR/vehicle-information-service/#idl-def-getrequest">
+<link rel="stylesheet" type="text/css" href="./style-general.css">
+
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="./vehicle-test-config.js"></script>
+<script src="./vehicle-test-helper.js"></script>
+
+<div id="test-title">
+[0100: get a Vehicle Data Model tree with a valid getMetadata request]
+</div>
+<br>
+<div id="test-assertion">
+<b>Test assertion:</b><br>
+When the client makes a 'getMetadata' request to the server<br>
+ with a data path which does not include wildcards, <br>
+ 'metadataSuccessResponse' is returned.<br>
+# Spec changed: 'getMetadata' does not support wildcards.
+</div>
+<div id="scenario">
+<br>
+<b>Test Scenario:</b><br>
+1. Execute 'getMetadata' method specifing a 'path'<br>
+   (e.g. Path = 'Signal.Drivetrain.InternalCombustionEngine.RPM')<br>
+2. Confirm 'metadataSuccessResponse' will be returned.<br>
+3. Confirm the obtained VSS matches with specified 'path'<br>
+   (To confirm, create 'answer' VSS by below steps.<br>
+    - Get 'full VSS' tree.<br>
+    - Extract the 'answer' VSS from 'full VSS' with 'path' string.<br>
+    - Compare getMetadata result and 'answer' VSS. If matches, test success.)<br>
+<br>
+<b>Expected Result:</b><br>
+- 'MetadataSuccessResponse' is returned and it contains VSS tree matches with specified data path. <br>
+</div>
+
+<div id="result"></div>
+<br>
+<div id="log"></div>
+
+<script>
+// const
+var reqId_0 = "reqid-0100"; // getMetadata for entire tree
+var reqId_1 = "reqid-0101"; // getMetadata with path spedified
+var objVssAll = null;
+var strVssAll = null;
+var objVssPart = null;
+var strVssPart = null;
+var strVssCorrect = null;
+
+var path = GETMETADATA_STANDARD_PATH;
+
+var t = async_test("getMetadata success case");
+var vehicle  = new WebSocket(VISS_URL, VISS_SUBPROTO);
+
+vehicle.onopen = function() {
+  // process messages from the server
+  vehicle.onmessage = function(event) {
+    //addLogMessage("Response: json="+event.data);
+    var msg = JSON.parse(event.data);
+    t.step_func(function() {
+
+      // Received full VSS tree
+      if (isMetadataSuccessResponse(reqId_0, msg)) {
+        objVssAll = msg.metadata;
+        strVssAll = JSON.stringify(msg.metadata);
+        //addLogMessage("<br>get vss all = " + strVssAll.substr(1,200));
+      }
+
+      // Received partial VSS tree
+      if (isMetadataSuccessResponse(reqId_1, msg)) {
+        var objVssPart = msg.metadata;
+        var strVssPart = JSON.stringify(msg.metadata);
+        addLogMessage("<br>getMetadata result vss = " + strVssPart);
+      }
+
+      // Enter to 'Verify' stage
+      if (strVssAll != null && strVssPart != null) {
+
+        // extract partial tree that corresponds to 'path'
+        addLogMessage("<br>try extractPartialVss " );
+        objVssCorrect = extractPartialVss(objVssAll, path);
+        addLogMessage("<br>'answer' vss = " + JSON.stringify(objVssCorrect));
+
+        // If two VSS matches, regard that VSS tree obtained with getMetadata() is correct.
+        var res = compareVss(objVssPart, objVssCorrect);
+        if (res) {
+          helper_terminate_success("received VSS tree matched with requested path. Right behavior.");
+        } else {
+          helper_terminate_failure("received VSS tree doesn't match with requested path. Wrong behavior.");
+        }
+      }
+    })();
+  }
+
+  // in case server doesn't return response
+  t.step_timeout(function() {
+    helper_terminate_failure("Fishish by timeout");
+  }, TIME_OUT_TIME);
+
+  // path = ''. Request 'Full VSS'
+  addLogMessage("Send getMetadata request. path = ''");
+  var get_req = '{"action":"getMetadata","path":"","requestId":"'+reqId_0+'"}';
+  addLogMessage("getMetadata req: json="+get_req);
+  vehicle.send(get_req);
+
+  // Request parital VSS by specifying 'path'
+  addLogMessage("Send getMetadata request. path = " + path);
+  var get_req = '{"action":"getMetadata","path":"'+ path +'" ,"requestId":"'+reqId_1+'"}';
+  addLogMessage("getMetadata req: json="+get_req);
+  vehicle.send(get_req);
+}
+
+// == extract partial vss from full-vss-tree by specifying 'path'
+// == ## copied from ACS VISS implementation visSvr.js
+function extractPartialVss(_objVssAll, _strPath) {
+
+  //path type to consider
+  // a. standard path (e.g.  'Signal.Drivetrain.InternalCombustionEngine.RPM')
+  // b. harfway path  (e.g.  'Signal.Drivetrain.InternalCombustionEngine')
+  // c. irregular path (e.g. 'Signal.Drivetrain.badname')
+  // #getMetadata doesn't support wildcard path
+
+  //Procedure
+  // - Separate _strPath with delimiter '.'
+  // - Traverse '_objVssAll' from root and try to find each nodes in _strPath
+  // - If succeed to find every nodes in _strPath, the data path is included in full VSS
+  // - Extract the partial VSS tree that matches with _strPath, from full VSS
+  // - Return the partial VSS tree
+
+  // if path is empty, return full VSS tree
+  if (_strPath == '' || _strPath == undefined || _strPath == null)
+    return _objVssAll;
+
+  // separate 'path' with '.' as delimiter
+  var nodeNames = _strPath.split(".");
+  var pathLen = nodeNames.length;
+  var allTree = _objVssAll;
+  var allTreePtr = null;  // pointer for traverse 'allTree'
+  allTreePtr = allTree;
+
+  var resultTree = {};
+  var resultTreePtr = resultTree; // pointer for traverse 'resultTree'
+
+  for (var i=0; i<pathLen; i++) {
+    var node = nodeNames[i];
+    if (allTreePtr[node] == undefined) {
+      // One of node in 'path' is not found in full VSS tree
+      // hence 'extract' fail. Return null.
+      return null;
+    }
+
+    // The 'node' is found in full VSS tree.
+    // log("Node:["+node+"] exists");
+    var nextNode = allTreePtr[node];
+
+    // Add copy of current Node to 'resultTree' for creating vss tree to return
+    resultTreePtr[node] = Object.assign({},nextNode); // Object.assign() copies an object
+
+    // If this is the last round of loop, just return resultTree and finish
+    if (i == pathLen-1) {
+      // _onsole.log("<br>SUCCESS: reached to the end");
+      // log("res = " + JSON.stringify(resultTree));
+      return resultTree;
+    }
+
+    // Prepare for next loop round
+
+    // Move allTreePtr position
+    if (nextNode['children'] != undefined) {
+      // log("children exists. Go next loop.");
+      allTreePtr = nextNode['children'];
+    } else {
+      // In case current 'node' doesn't have 'children'
+      // which means 'leaf' or 'irregular node'.
+      // log("No children. Go next loop");
+      allTreePtr = nextNode;
+    }
+
+    // Move resultTreePtr position
+    var tmpObj = null;
+    if (resultTreePtr[node]['children']) {
+      // Empty 'children' node to delete unnecessary children
+      // Necessary child will be added in next round
+      resultTreePtr[node]['children'] = {};
+      tmpObj = resultTreePtr[node]['children'];
+
+    } else {
+      tmpObj = resultTreePtr[node];
+    }
+    resultTreePtr = tmpObj;
+  }
+}
+
+// == Compare two VSS trees
+function compareVss(_objVssA, _objVssB) {
+
+  // As simple strategy, stringify and compare as strings
+  // - In this case, it matches only when both trees are fully identical
+  // - [TODO] Might be OK to consider as 'matched'
+  //          even when lacking less important properties
+  var strA = JSON.stringify(_objVssA);
+  var strB = JSON.stringify(_objVssB);
+
+  if (strA === strB) {
+    addLogMessage("<br>SUCCESS: The getMetadata result matched with 'answer' vss.");
+    return true;
+  } else {
+    addLogMessage("<br>FAILURE: The getMetadata result not matched with 'answer' vss.");
+    return false;
+  }
+}
+
+</script>
+</html>

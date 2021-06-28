@@ -1,0 +1,63 @@
+<!DOCTYPE HTML>
+<meta charset="utf-8">
+<title>
+[0060: establish a WebSocket session with 'ws' shema]
+</title>
+<link rel="help" href="https://www.w3.org/TR/vehicle-information-service/#idl-def-getrequest">
+<link rel="stylesheet" type="text/css" href="./style-general.css">
+
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="./vehicle-test-config.js"></script>
+<script src="./vehicle-test-helper.js"></script>
+
+<div id="test-title">
+[0060: establish a WebSocket session with 'ws' shema]
+</div>
+<br>
+<div id="test-assertion">
+<b>Test assertion:</b><br>
+When the client makes a request to the server to create a new WebSocket session<br>
+ whose schema and sub-protocol are 'ws' and 'wvss' with a version number suffix,<br>
+ the server refuses the request.<br>
+</div>
+<div id="scenario">
+<br>
+<b>Test Scenario:</b><br>
+1. Try to open websocket connection with 'ws' protocol + 'wvss1.0" subprotocol<br>
+2. Confirm the websocket connection will not be established.<br>
+<br>
+<b>Expected Result:</b><br>
+- Websocket connection is not be established. <br>
+</div>
+
+<br>
+<div id="result"></div>
+<br>
+<div id="log"></div>
+
+
+<script>
+var WS_URL = "ws://"+VISS_HOST+":"+VISS_PORT;
+var t = async_test("Initialize: wss connection test");
+
+var vehicle  = new WebSocket(WS_URL, VISS_SUBPROTO);
+
+vehicle.onopen = function() {
+  // show success
+  helper_terminate_failure("connected with " + WS_URL + ". Wrong behavior.");
+}
+
+vehicle.onerror = function() {
+  // show error
+  helper_terminate_success("could not connect with " + WS_URL + ". Correct behavior." );
+}
+
+// in case server doesn't return response
+t.step_timeout(function() {
+  helper_terminate_failure("Fishish by timeout");
+}, TIME_OUT_TIME);
+
+</script>
+</html>
+

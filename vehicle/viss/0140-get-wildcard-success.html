@@ -1,0 +1,76 @@
+<!DOCTYPE HTML>
+<meta charset="utf-8">
+<title>
+[0140: get signals and data with an valid request with a wildcard]
+</title>
+<link rel="help" href="https://www.w3.org/TR/vehicle-information-service/#idl-def-getrequest">
+<link rel="stylesheet" type="text/css" href="./style-general.css">
+
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<script src="./vehicle-test-config.js"></script>
+<script src="./vehicle-test-helper.js"></script>
+
+<div id="test-title">
+[0140: get signals and data with an valid request with a wildcard]
+</div>
+<br>
+<div id="test-assertion">
+<b>Test assertion:</b><br>
+When the client makes a request with a correct 'get' action<br>
+ with a wildcard to the server,<br>
+ a JSON data object defined as 'getSuccessResponse' is returned.<br>
+</div>
+<div id="scenario">
+<br>
+<b>Test Scenario:</b><br>
+1. Execute 'get' method specifing a data path includes wildcard('*') and requestId.<br>
+   (e.g. 'Signal.Drivetrain.Transmission.*')<br>
+2. Confirm 'GetSuccessResponse' containing the specified requestId.<br>
+<br>
+<b>Expected Result:</b><br>
+- Received 'GetSuccessResponse' containing specified requestId. <br>
+</div>
+
+<div id="result"></div>
+<br>
+<div id="log"></div>
+
+<script>
+var reqId = "reqid-0140";
+var path = GET_WILDCARD_PATH;
+
+var t = async_test("Get with wildcard path. Success case");
+var vehicle  = new WebSocket(VISS_URL, VISS_SUBPROTO);
+
+vehicle.onopen = function() {
+  // process messages from the server
+  vehicle.onmessage = function(event) {
+    addLogMessage("Response: json="+event.data);
+    var msg = JSON.parse(event.data);
+    t.step_func(function() {
+
+      if (isGetSuccessResponse(reqId, msg)) {
+        //TODO: Returned value is correct response from the request? How to verify?
+
+        assert_true(true, "Get response received. value = " + msg.value);
+        helper_terminate_success("Get response received. value = " + msg.value);
+      } else {
+        helper_terminate_failure("Get method failed");
+      }
+
+    })();
+  }
+
+  // in case server doesn't return response
+  t.step_timeout(function() {
+    helper_terminate_failure("Fishish by timeout");
+  }, TIME_OUT_TIME);
+
+  addLogMessage('Send get request: path=" '+path+' "');
+  var request_json = '{"action":"get","path":"'+ path +'" ,"requestId":"'+reqId+'"}';
+  addLogMessage("Request: json="+request_json);
+  vehicle.send(request_json);
+}
+</script>
+</html>
